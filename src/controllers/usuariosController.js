@@ -1,54 +1,54 @@
-import UsuarioDTO from "../dto/Usuario.dto.js";
-import { usuariosService } from "../services/index.js";
-import __dirname from "../utils/index.js";
+import { UsuariosService } from "../services/usuariosService.js";
 
-const getAllUsuarios = async(req,res) => {
-    const usuarios = await usuariosService.getAll();
-    res.send({status:"success", payload:usuarios})
-}
+export class UsuariosController{
+    static modificarRole = async(req,res) => {
+        try {
+            const usuarioID = req.params.uid;
+            const usuario = await UsuariosService.getUsuarioById(usuarioID);
+            if(usuario.status !== "completo"){
+                return res.json({status:"error", message:"ERROR (completar todos los documentos necesarios)"})
+            }
+            if(usuario.role === "premium"){
+                usuario.role = "user";
+            } else if(usuario.role === "user"){
+                usuario.role = "premium";
+            } else {
+                res.json({status:"error", message:"ERROR (no se puede cambiar el rol del usuario)"});
+            }
+            await UsuariosService.updateUsuario(usuario._id, usuario);
+            res.json({status:"success", message:"Rol de usuario modificado correctamente"});
+        } catch (error) {
+            res.json({status:"error", message:error.message});
+        }
+    };
 
-const createUsuario = async(req,res) => {
-    const { name, email, password } = req.body;
-    if(!name||!email||!password) return res.status(400).send({status:"error", error:"Valores incompletos"})
-    const usuario = UsuarioDTO.getUsuarioInputFrom({name, email, password});
-    const resultado = await usuariosService.create(usuario);
-    res.send({status:"success", payload:resultado})
-}
-
-const updateUsuario = async(req,res) => {
-    const usuarioUpdateBody = req.body;
-    const usuarioId = req.params.uid;
-    const resultado = await usuariosService.update(usuarioId,usuarioUpdateBody);
-    res.send({status:"success",message:"Usuario actualizado"})
-}
-
-const deleteUsuario = async(req,res) => {
-    const usuarioId = req.params.uid;
-    const resultado = await usuariosService.delete(usuarioId);
-    res.send({status:"success", message:"Usuario eliminado... para siempre"})
-}
-
-const createUsuarioWithImage = async(req,res) => {
-const file = req.file;
-const {name, email, password} = req.body;
-if(!name||!email||!password) return res.status(400).send({status:"error", error:"Valores Incompletos"})
-console.log(file);
-const usuario = UsuarioDTO.getUsuarioInputFrom({
-    name,
-    email,
-    password,
-    image:`${__dirname}/../public/img/${file.filename}`
-});
-};
-
-console.log(usuario);
-const resultado =await usuariosService.create(usuario);
-res.send({status:"success", payload:resultado})
-
-export default {
-    getAllUsuarios,
-    createUsuario,
-    updateUsuario,
-    deleteUsuario,
-    createUsuarioWithImage
+    static uploadUsuarioDocumentos = async(req,res)=>{
+        try {
+            const usuarioID = req.params.uid;
+            const usuario = await UsuariosService.getUsuarioById(usuarioID);
+            const identificacion = req.files['identificacion']?.[0] || null;
+            const domicilio = req.files['domicilio']?.[0] || null;
+            const cuenta = req.files['cuenta']?.[0] || null;
+            const documentos = [];
+            if(identificacion){
+                documentos.push({name:"identificacion", reference: identificacion.filename});
+            }
+            if(domicilio){
+                documentos.push({name:"domicilio", reference: domicilio.filename});
+            }
+            if(cuenta){
+                documentos.push({name:"cuenta", reference: cuenta.filename});
+            }
+            usuario.documentos = documentos;
+            if(documentos.length<3){
+                usuario.status = "incompleto";
+            } else {
+                usuario.status = "completo";
+            }
+            await UsuariosService.updateUsuario(usuario._id, usuario);
+            res.json({status:"success", message:"Documentos actualizados correctamente"});
+        } catch (error) {
+            res.json({status:"error", message:error.message});
+        }
+    };
 }
