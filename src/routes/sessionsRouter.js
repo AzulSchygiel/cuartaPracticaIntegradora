@@ -1,12 +1,26 @@
-import { Router } from 'express';
-import sessionsController from "../controllers/sessionsController.js";
+import { Router } from "express";
+import passport from "passport";
+import { SessionsController } from "../controllers/sessionsController.js";
+import { uploadPerfil } from "../utils.js";
 
 const router = Router();
 
-router.post("/registro", sessionsController.registro);
-router.post("/iniciarsesion", sessionsController.iniciarsesion);
-router.get("/current", sessionsController.current);
-router.get("/unprotectedIniciarsesion", sessionsController.unprotectedIniciarsesion);
-router.get("/unprotectedCurrent", sessionsController.unprotectedCurrent);
+router.post("/registrarse", uploadPerfil.single("avatar") , passport.authenticate("registroLocalStrategy", {
+    failureRedirect:"/api/sessions/fail-registro"
+}), SessionsController.redirectIniciarsesion);
 
-export default router;
+router.get("/fail-registro", SessionsController.failRegistro);
+
+router.post("/iniciarsesion", passport.authenticate("iniciosesionLocalStrategy", {
+    failureRedirect:"/api/sessions/fail-iniciodesesion"
+}), SessionsController.redirectPerfil);
+
+router.get("/fail-iniciodesesion", SessionsController.failIniciodesesion);
+
+router.post("/forgot-contraseña", SessionsController.forgotContraseña);
+
+router.post("/reset-contraseña", SessionsController.resetContraseña);
+
+router.get("/cerrarsesion", SessionsController.cerrarsesion);
+
+export {router as sessionsRouter};
