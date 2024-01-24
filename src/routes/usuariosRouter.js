@@ -1,13 +1,15 @@
-import { Router } from 'express';
-import usuariosController from "../controllers/usuariosController.js";
-import uploader from "../utils/uploader.js";
+import { Router } from "express";
+import { checkRole } from "../middlewares/authentication.js";
+import { UsuariosController } from "../controllers/usuariosController.js";
+import { uploadDocumentos } from "../utils.js";
 
 const router = Router();
 
-router.get("/", usuariosController.getAllUsuarios);
-router.post("/", usuariosController.createUsuario);
-router.post("/withimage", uploader.single("image"), usuariosController.createUsuarioWithImage);
-router.put("/:uid", usuariosController.updateUsuario);
-router.delete("/uid", usuariosController.deleteUsuario);
+router.put("/premium/:uid", checkRole(["admin"]), UsuariosController.modificarRole);
+router.post("/:uid/documentos", isAuth, uploadDocumentos.fields([
+    {name:"identificacion", maxCount:1},
+    {name:"domicilio", maxCount:1},
+    {name:"cuenta", maxCount:1},
+]), UsuariosController.uploadUsuarioDocumentos);
 
-export default router;
+export { router as usuariosRouter };
