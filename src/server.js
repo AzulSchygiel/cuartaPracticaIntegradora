@@ -1,23 +1,23 @@
 import express from "express";
-import mongoose from "mongoose";
-import cookieParser from "cookie-parser";
-
+import { __dirname } from "./utils.js";
+import path from "path";
+import {engine} from "express-handlebars";
+import {Server} from "socket.io";
+import { ProductosService } from "./services/ProductosService.js";
+import { connectDB } from "./config/connectionDB.js";
 import session from "express-session";
 import MongoStore from "connect-mongo";
-import { engine } from "express-handlebars";
-import { __dirname } from "./utils.js";
-import path, { extname } from "path";
-import { connectDB } from "./config/connectionDB.js";
 import passport from "passport";
-import { initPassport } from "./config/passport.config.js";
-import { generateToken } from "./utils.js";
+import { initializePassport } from "./config/passport.config.js";
 import { config } from "./config/config.js";
+import { errorHandler } from "./middlewares/errorHandler.js";
 
-import sessionsRouter from "./routes/sessionsRoute.js";
-import productosRouter from "./routes/productosRoute.js";
-import carritoRouter from "./routes/carritoRoute.js";
-import usuariosRouter from "./routes/usuariosRouter.js"
-
+import { viewsRouter } from "./routes/viewsRoute.js";
+import { productosRouter } from "./routes/productosRoute.js";
+import { carritoRouter } from "./routes/carritoRoute.js";
+import { sessionsRouter } from "./routes/sessionsRoute.js";
+import { usuariosRouter } from "./routes/usuariosRoute.js";
+import { connect } from "http2";
 
 //~~~~~~~~~~~~INSTALACIÓN~~~~~~~~~~~~~~//
 // npm init -y
@@ -31,58 +31,47 @@ import usuariosRouter from "./routes/usuariosRouter.js"
 // npm i dotenv
 // npm i passport-github2
 
+
+const port = 8080;
 const app = express();
-const PUERTO = process.env.PUERTO||8080;
-const connection = mongoose.connect(`URL de mongo`);
-console.log("Base de datos conectada")
 
-//~~~~~~~~~~~~~MIDDLEWARES~~~~~~~~~~~~~~~//
+app.use(express.static(path.join(__dirname, "/public")));
 app.use(express.json());
-app.use(cookieParser());
+app.use(express.urlencoded({extended:true}));
 
-//~~~~~~~~~~~~~~~RUTAS~~~~~~~~~~~~~~~~//
-app.use("/api/usuario", usuariosRouter);
-app.use("/api/sessions", sessionsRouter);
-app.use("/api/carrito", carritoRouter);
-app.use("/api/productos", productosRouter);
+const httpServer = app.listen(port,()=>console.log(`Servidor ejecutandose en el puerto ${port}`));
 
-app.listen(PUERTO, () => console.log(`Server Funcionando en puerto ${port}`))
+const io = new Server(httpServer);
 
-//~~~~~~~~~~~~~HANDLEBARS~~~~~~~~~~~~~~~//
+connectDB();
+
 app.engine('.hbs', engine({extname: '.hbs'}));
 app.set('view engine', '.hbs');
 app.set('views', path.join(__dirname, "/views"));
 
+app.use(session({
+    store:MongoStore.create({
+        mongoUrl:config.mongo.url
+    }),
+    secret:"coderSecret",
+    resave:true,
+    saveUninitialized:true
+}));
 
-//~~~~~~~~~~~~~TOKEN~~~~~~~~~~~~~~~//
-app.get("/login", (req, res) => {
-    const user = req.body; //Se pasa el usuario de la Base de Datos
-    const token = generateToken(user); //Genera el Token
-    res.json({ status: "success", accessToken: token }); //Se responde al usuario
-});
-
-//~~~~~~~~MOTOR DE PLANTILLAS~~~~~~~~~~//
-app.engine(".hbs", engine({ extname: ".hbs" }));
-app.set("view engine", ".hbs");
-app.set("views", path.join(__dirname, "/views"));
-
-/*~~~~~~~~~~~~~SESSIONS~~~~~~~~~~~~~~~
-app.use(
-    session({
-        store: MongoStore.create({
-            ttl: 4000,
-            mongoUrl: config.mongo.url,
-        }),
-        secret: config.server.secretSession,
-        resave: true,
-        saveUninitialized: true,
-    })
-);
-*/
-/*~~~~~~~~PASSPORT~~~~~~~~~~
 initializePassport();
 app.use(passport.initialize());
 app.use(passport.session());
-*/
 
-export {app};
+//RUTAS/ROUTES
+app.use(viewsRouter);
+app.use("/api/productos", productosRouter);
+app.use("/api/carrito", carritoRouter);
+app.use("/api/sesiones", sessionsRouter);
+app.use("/api/usuarios", usuariosRouter);
+app.use(errorHandler);
+
+io.on("connection", async(socket)=>{
+    console.log("Usuario conectado");
+    const productos = await ProductosService.getProductos();
+    socket.emit("productosArray", productos);
+});
